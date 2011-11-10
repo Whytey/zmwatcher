@@ -1,0 +1,76 @@
+#!/usr/bin/perl -w
+
+use strict;
+
+use ZoneMinder;
+
+$| = 1;
+
+zmDbgInit( "myscript", level=>0, to_log=>0, to_syslog=>0, to_term=>1 );
+
+my $command = "zabbix_sender -z 192.168.0.100 -s %s -k state -o %d";
+
+my $dbh = DBI->connect( "DBI:mysql:database=".ZM_DB_NAME.";host=".ZM_DB_HOST, ZM_DB_USER, ZM_DB_PASS );
+
+my $sql = "select M.*, max(E.Id) as LastEventId from Monitors as M left join Events as E on M.Id = E.MonitorId where M.Function != 'None' group by (M.Id)";
+my $sth = $dbh->prepare_cached( $sql ) or die( "Can't prepare '$sql': ".$dbh->errstr() );
+
+my $res = $sth->execute() or die( "Can't execute '$sql': ".$sth->errstr() );
+my @monitors;
+my @monitors_states;
+while ( my $monitor = $sth->fetchrow_hashref() )
+{
+    next if ( !zmMemVerify( $monitor ) );
+    push( @monitors, $monitor );
+    push( @monitors_states, zmGetMonitorState ( $monitor ))
+}
+
+print "Idle: ".STATE_IDLE;
+print "Alert: ".STATE_ALERT;
+print "Alarm: ".STATE_ALARM;
+print "Tape: ".STATE_TAPE;
+
+while( 1 )
+{
+    my $monitor_count = 0;
+    my $num_monitors = scalar( @monitors );
+    while ( $monitor_count < $num_monitors )
+    {
+        my $monitor = $monitors[ $monitor_count ];
+
+        # If this monitor is bad, skip it.
+        if ( !zmMemVerify( $monitor ) )
+        {
+            next;
+        }
+
+        # Get the monitors new state.
+        my $new_state = zmGetMonitorState ( $monitor );
+
+        # If it is different to the currently cached state;
+        if ( $monitors_states [ $monitor_count ] != $new_state )
+        {
+            print ("New state: ".$new_state."\n");
+            if ($new_state != 1) 
+            {
+                print( sprintf($command, $monitor->{Name}, 0 )."\n");
+                system( sprintf($command, $monitor->{Name}, $new_state ));
+
+                if ( $new_state == STATE_IDLE )
+                {
+                    print("Post event ID here???\n");
+#                    system( sprintf($command, $monitor->{Name}, 0 ));
+                }
+            
+                # Cache this new state.
+                $monitors_states [ $monitor_count ] = $new_state;
+            }
+        }
+    }
+    continue
+    {
+        $monitor_count++;
+    }
+
+    sleep( 1 );
+}

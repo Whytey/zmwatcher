@@ -1,0 +1,14 @@
+Source: zmwatcher
+Section: python
+Priority: extra
+Maintainer: David Whyte <david.whyte@gmail.com>
+Build-Depends: debhelper (>= 7), python-support, python (>=2.4)
+Standards-Version: 3.9.2
+Homepage: http://david.whyte
+
+Package: zmwatcher
+Architecture: all
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Bridge between ZoneMinder and Zabbix.
+ Script for monitoring ZoneMinder monitors and 
+ reporting their status with Zabbix.
